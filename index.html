@@ -1,0 +1,429 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Java Quiz Application</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg,#667eea,#764ba2);
+    margin: 0;
+    padding: 25px;
+}
+
+.container {
+    background: white;
+    max-width: 800px;
+    margin: auto;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px #3333;
+}
+
+h1, h2 { text-align: center; color: #333; }
+
+button {
+    padding: 12px 20px;
+    background: #667eea;
+    color: white;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    margin: 8px 4px;
+}
+
+button:hover { background: #4b5fc7; }
+
+input, select {
+    width: 100%;
+    padding: 11px;
+    margin: 8px 0 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+label { font-weight: bold; }
+
+.panel { margin-top: 20px; }
+
+.hidden { display: none; }
+
+.question-card {
+    background: #f3f4ff;
+    padding: 18px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.option {
+    display: block;
+    padding: 12px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin: 10px 0;
+    cursor: pointer;
+}
+
+.option input {
+    width: auto;
+    margin: 0 10px 0 0;
+}
+
+.timer {
+    text-align: center;
+    font-size: 23px;
+    font-weight: bold;
+    color: #d93025;
+}
+
+.navigation {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+#result {
+    background: #effaf2;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Java Quiz Application</h1>
+<p style="text-align:center">Test your Java knowledge</p>
+
+<div id="home">
+    <h2>Welcome to QuizMaster</h2>
+    <button onclick="showAdmin()">Admin Panel</button>
+    <button onclick="loadQuiz()">Student Quiz</button>
+</div>
+
+<!-- ADMIN PANEL -->
+
+<div id="admin" class="panel hidden">
+
+<h2>Add Quiz Questions</h2>
+
+<label>Question</label>
+<input id="question" placeholder="Enter question">
+
+<label>Option 1</label>
+<input id="option1" placeholder="Option 1">
+
+<label>Option 2</label>
+<input id="option2" placeholder="Option 2">
+
+<label>Option 3</label>
+<input id="option3" placeholder="Option 3">
+
+<label>Option 4</label>
+<input id="option4" placeholder="Option 4">
+
+<label>Correct Answer</label>
+<select id="correctAnswer">
+    <option value="1">Option 1</option>
+    <option value="2">Option 2</option>
+    <option value="3">Option 3</option>
+    <option value="4">Option 4</option>
+</select>
+
+<button onclick="addQuestion()">Add Question</button>
+<button onclick="showHome()">Home</button>
+
+<p id="adminMessage"></p>
+<p id="questionCount"></p>
+
+</div>
+
+<!-- STUDENT QUIZ -->
+
+<div id="student" class="panel hidden">
+
+<h2>Student Quiz</h2>
+
+<p id="progress"></p>
+<div class="timer" id="timer">Time Left: 60 seconds</div>
+
+<div id="questionArea"></div>
+
+<div class="navigation">
+    <button onclick="previousQuestion()">Previous</button>
+    <button onclick="nextQuestion()">Next</button>
+</div>
+
+<button onclick="submitQuiz()">Submit Quiz</button>
+
+</div>
+
+<!-- RESULT -->
+
+<div id="resultPanel" class="panel hidden">
+
+<div id="result"></div>
+<button onclick="showHome()">Back to Home</button>
+
+</div>
+
+</div>
+
+<script>
+
+const API = "http://localhost:8082/api";
+
+let questions = [];
+let answers = [];
+let current = 0;
+let timeLeft = 60;
+let timerInterval = null;
+let submitted = false;
+
+function hideAll() {
+    document.getElementById("home").classList.add("hidden");
+    document.getElementById("admin").classList.add("hidden");
+    document.getElementById("student").classList.add("hidden");
+    document.getElementById("resultPanel").classList.add("hidden");
+}
+
+function showHome() {
+    stopTimer();
+    hideAll();
+    document.getElementById("home").classList.remove("hidden");
+}
+
+async function showAdmin() {
+    hideAll();
+    document.getElementById("admin").classList.remove("hidden");
+    await updateCount();
+}
+
+async function updateCount() {
+    try {
+        const response = await fetch(API + "/questions");
+        const data = await response.json();
+        document.getElementById("questionCount").innerText =
+            "Total questions added: " + data.length + " / 60";
+    } catch (error) {
+        document.getElementById("questionCount").innerText =
+            "Unable to connect to server.";
+    }
+}
+
+async function addQuestion() {
+
+    const form = new URLSearchParams();
+
+    form.append("question", document.getElementById("question").value);
+    form.append("option1", document.getElementById("option1").value);
+    form.append("option2", document.getElementById("option2").value);
+    form.append("option3", document.getElementById("option3").value);
+    form.append("option4", document.getElementById("option4").value);
+    form.append("correctAnswer", document.getElementById("correctAnswer").value);
+
+    try {
+        const response = await fetch(API + "/addQuestion", {
+            method: "POST",
+            body: form
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error);
+
+        document.getElementById("adminMessage").innerText =
+            "Question added successfully!";
+
+        document.getElementById("question").value = "";
+        document.getElementById("option1").value = "";
+        document.getElementById("option2").value = "";
+        document.getElementById("option3").value = "";
+        document.getElementById("option4").value = "";
+
+        await updateCount();
+
+    } catch (error) {
+        document.getElementById("adminMessage").innerText =
+            error.message || "Unable to add question.";
+    }
+}
+
+async function loadQuiz() {
+
+    try {
+        const response = await fetch(API + "/questions");
+        questions = await response.json();
+
+        if (!response.ok || questions.length === 0) {
+            alert("Please add questions in Admin Panel first.");
+            return;
+        }
+
+        if (questions.length > 60) {
+            alert("Only 60 questions are supported.");
+            return;
+        }
+
+        answers = new Array(questions.length).fill(0);
+        current = 0;
+        timeLeft = 60;
+        submitted = false;
+
+        hideAll();
+        document.getElementById("student").classList.remove("hidden");
+
+        displayQuestion();
+        startTimer();
+
+    } catch (error) {
+        alert("Unable to load questions. Check Java server.");
+    }
+}
+
+function displayQuestion() {
+
+    const q = questions[current];
+
+    document.getElementById("progress").innerText =
+        "Question " + (current + 1) + " of " + questions.length;
+
+    const area = document.getElementById("questionArea");
+
+    area.innerHTML = `
+        <div class="question-card">
+            <h3>${current + 1}. ${escapeHTML(q.question)}</h3>
+
+            ${q.options.map((option, index) => `
+                <label class="option">
+                    <input type="radio"
+                        name="answer"
+                        value="${index + 1}"
+                        ${answers[current] === index + 1 ? "checked" : ""}
+                        onchange="saveAnswer(${index + 1})">
+                    ${escapeHTML(option)}
+                </label>
+            `).join("")}
+        </div>
+    `;
+}
+
+function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+}
+
+function saveAnswer(value) {
+    answers[current] = value;
+}
+
+function nextQuestion() {
+    if (current < questions.length - 1) {
+        current++;
+        displayQuestion();
+    }
+}
+
+function previousQuestion() {
+    if (current > 0) {
+        current--;
+        displayQuestion();
+    }
+}
+
+function startTimer() {
+
+    updateTimer();
+
+    timerInterval = setInterval(() => {
+
+        timeLeft--;
+        updateTimer();
+
+        if (timeLeft <= 0) {
+            submitQuiz();
+        }
+
+    }, 1000);
+}
+
+function updateTimer() {
+    document.getElementById("timer").innerText =
+        "Time Left: " + timeLeft + " seconds";
+}
+
+function stopTimer() {
+    if (timerInterval !== null) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
+
+async function submitQuiz() {
+
+    if (submitted) return;
+
+    submitted = true;
+    stopTimer();
+
+    const form = new URLSearchParams();
+    form.append("answers", answers.join(","));
+
+    try {
+
+        const response = await fetch(API + "/submit", {
+            method: "POST",
+            body: form
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Result calculation failed");
+        }
+
+        hideAll();
+
+        document.getElementById("resultPanel").classList.remove("hidden");
+
+        document.getElementById("result").innerHTML = `
+            <h2>Quiz Completed!</h2>
+            <h1>${data.percentage}%</h1>
+            <p>Total Questions: ${data.total}</p>
+            <p>Correct Answers: ${data.correct}</p>
+            <p>Wrong Answers: ${data.wrong}</p>
+            <p>Score: ${data.correct} / ${data.total}</p>
+            <p>${timeLeft <= 0 ? "Time is up! Your quiz was submitted automatically." : "Your quiz was submitted successfully."}</p>
+        `;
+
+    } catch (error) {
+
+        submitted = false;
+
+        document.getElementById("result").innerText =
+            "Unable to calculate result: " + error.message;
+
+        hideAll();
+        document.getElementById("resultPanel").classList.remove("hidden");
+    }
+}
+
+</script>
+
+</body>
+</html>
